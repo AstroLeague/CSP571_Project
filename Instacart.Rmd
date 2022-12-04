@@ -1,0 +1,520 @@
+---
+title: "Instacart Data Analysis"
+author: "Naga Surya Suresh"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+## Market Basket Analysis of Instacart Data
+
+### Loading Dependecies
+```{r}
+setwd("/Users/nagasurya/Documents/IllinoisTech/CSP571/Project")
+libraries <- c("data.table","dplyr","ggplot2","knitr","stringr","DT","magrittr","grid","gridExtra","sqldf","Matrix","arules","tidyr","arulesViz","methods")
+lapply(libraries, require, character.only = TRUE)
+rm(list=ls())
+```
+
+### Loading Data
+
+```{r}
+products<-read.csv("Data/products.csv")
+orders<-read.csv("Data/orders.csv")
+prior<-read.csv("Data/order_products__prior.csv")
+aisles<-read.csv("Data/aisles.csv")
+departments<-read.csv("Data/departments.csv")
+Ordertrain<-read.csv("Data/order_products__train.csv")
+```
+
+### Viewing Data
+
+Orders
+
+```{r}
+head(orders,5)
+```
+
+```{r}
+head(products,5)
+```
+
+
+
+```{r}
+head(aisles,5)
+```
+
+
+```{r}
+head(departments,5)
+```
+
+```{r}
+head(prior,5)
+```
+
+The data requires several modifications to make the tests work, we converted the data to the required formats for the orders, products, aisles and departments data set to factors and numeric values.
+
+```{r}
+#c
+```
+
+So, the final data set types of each of the data set is as below.
+```{r}
+data.frame("orders"=sapply(orders, class))
+data.frame("aisles"=sapply(aisles, class))
+data.frame("departments"=sapply(departments, class))
+data.frame("prior"=sapply(prior, class))
+data.frame("products"=sapply(products, class))
+```
+
+Mergeing the dataset of products, aisles and department data sets to view the product offerings.
+```{r}
+ProductsNAisles <- merge(products,aisles,by="aisle_id")
+ProductsNAislesNDepartments <- merge(ProductsNAisles,departments,"department_id")
+head(ProductsNAislesNDepartments,5)
+```
+
+```{r}
+cat("After mergeing the data below is the results. The Merged products, Aisles and Departments data has",dim(ProductsNAislesNDepartments)[1],"Rows and ",dim(ProductsNAislesNDepartments)[2]," Columns")
+```
+
+### Top 15 and Bottom 15 Aisle by Variety of Product Offering 
+```{r}
+Number_of_Product_each_Aisle<- ProductsNAislesNDepartments %>% 
+                                group_by(aisle) %>% 
+                                summarise(Number_of_Products = n()) %>% 
+                                arrange(desc(Number_of_Products))
+
+
+Top_15 <- head(Number_of_Product_each_Aisle, n=15)
+
+
+ggplot(Top_15, 
+       aes(x = reorder(aisle,Number_of_Products), 
+           y = Number_of_Products,
+           label = paste("  ",round(Number_of_Products,0)))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title="Top 15 Aisle by Variety of Product Offering",y="Number of Products",x="Aisle") +
+  geom_text(nudge_y = 30)
+```
+
+```{r}
+Bottom_15 <- tail(Number_of_Product_each_Aisle, n=15)
+
+
+ggplot(Bottom_15, 
+       aes(x = reorder(aisle,Number_of_Products), 
+           y = Number_of_Products,
+           label = paste0(round(Number_of_Products,0)))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title="Bottom 15 Aisle by Variety of Product Offering",y="Number of Products",x="Aisle") +
+  geom_text(nudge_y = 3)
+```
+### Department by Variety of Product Offering 
+```{r}
+Number_of_Product_each_department <- ProductsNAislesNDepartments %>% 
+                                group_by(department) %>% 
+                                summarise(Number_of_Products = n()) %>% 
+                                arrange(desc(Number_of_Products))
+
+
+ggplot(Number_of_Product_each_department, 
+       aes(x = reorder(department, Number_of_Products), 
+           y = Number_of_Products,
+           label = paste("  ",round(Number_of_Products,0)))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title="Department by Variety of Product Offering",y="Number of Products",x="Department") +
+  geom_text(nudge_y = 200)
+```
+### Orders by hour 
+
+```{r}
+Orders_everyhour<- orders %>% 
+                    group_by(order_hour_of_day) %>%
+                    summarise(Number_of_Orders=n()) %>% 
+                    mutate(Percentage_of_orders = (Number_of_Orders * 100/ nrow(orders)))
+
+
+
+ggplot(Orders_everyhour, 
+       aes(x = order_hour_of_day , 
+           y = Number_of_Orders,
+           label = paste("  ",round(Number_of_Orders,0)))) +
+  geom_bar(stat = "identity") +
+  labs(title="Order hours",y="Products ordered",x="Hour") +
+  geom_text(nudge_y = 4)
+```
+### Orders by Week 
+
+```{r}
+Orders_everyday<- orders %>% 
+                    group_by(order_dow) %>%
+                    summarise(Number_of_Orders=n()) %>% 
+                    mutate(Percentage_of_orders = (Number_of_Orders * 100/ nrow(orders)))
+
+
+
+ggplot(Orders_everyday, 
+       aes(x = order_dow , 
+           y = Number_of_Orders,
+           label = paste("  ",round(Number_of_Orders,0)))) +
+  geom_bar(stat = "identity") +
+  labs(title="Orders by Week",y="Products ordered",x="Day") +
+  geom_text(nudge_y = 4)
+```
+### Orders by Weekand hour
+
+```{r}
+
+
+
+
+Dow_hod_orders<-orders %>% 
+                  group_by(order_dow,order_hour_of_day) %>%
+                  summarise(Number_of_Orders=n())
+
+Dow_hod_orders_combined <- merge(Dow_hod_orders,Orders_everyday,by="order_dow",all.x = TRUE) %>%
+                            mutate(Percentage_by_doy=Number_of_Orders.x*100/Number_of_Orders.y)
+
+
+ggplot(Dow_hod_orders_combined, 
+       aes(x = Dow_hod_orders_combined$order_hour_of_day, 
+           y = Dow_hod_orders_combined$Percentage_by_doy)) +
+  geom_bar(stat="identity") +
+  labs(title="Visualizing orders by hour of day",x="hours of the day",y="Percentage of orders for the day")+
+  facet_grid(~ Dow_hod_orders_combined$order_dow)
+```
+```{r}
+library("plyr")
+Reordering_Gap <- count(orders , "days_since_prior_order") %>%
+  arrange(desc(freq)) %>% 
+  mutate(Percent_orders=round(freq*100/nrow(orders)),2)
+
+
+
+Reordering_Gap_plot<-ggplot(orders,aes(x=days_since_prior_order))+
+  geom_histogram(aes(fill=..count..),binwidth=1)+
+  scale_x_continuous(name = "Days Since Prior Order",breaks = seq(0, 30, 1))+
+  scale_y_continuous(name = "Frequency of Orders",breaks=seq(0,1000000,100000))+
+  ggtitle("Gap between two orders")+
+  labs(x="Days Since Prior Order")+
+  theme_update()
+Reordering_Gap_plot
+```
+
+```{r}
+top15_products.prior <- count(prior$product_id) %>% arrange(desc(freq)) %>% head(15)
+
+colnames(top15_products.prior)[1]<-'product_id'
+
+Top15Products<- merge(top15_products.prior,ProductsNAislesNDepartments,by='product_id') %>%
+                  arrange(desc(freq))
+
+ggplot(Top15Products, 
+       aes(x = reorder(product_name,freq), 
+           y = freq,label=paste0(round(freq,0)))) +
+  geom_bar(stat = "identity")+
+  coord_flip()+labs(title="Most ordered Products: Top 15 ",y="Number of orders",x="Product")+
+  geom_text(nudge_y = 30000)
+
+```
+
+```{r}
+bottom15_products.prior <- count(prior$product_id) %>% arrange(desc(freq)) %>% tail(15)
+
+colnames(bottom15_products.prior)[1]<-'product_id'
+
+Bottom15Products<- merge(bottom15_products.prior,ProductsNAislesNDepartments,by='product_id') %>%
+                  arrange(desc(freq))
+
+ggplot(Bottom15Products, 
+       aes(x = reorder(product_name,freq), 
+           y = freq,label=paste0(round(freq,0)))) +
+  geom_bar(stat = "identity")+
+  coord_flip()+labs(title="Least ordered Products: Bottom 15 ",y="Number of orders",x="Product")+
+  geom_text(nudge_y = .1)
+```
+### MArket Basket Analysis
+
+```{r}
+
+prior4mba<-split(prior$product_id,prior$order_id)
+
+transaction_prior<-as(prior4mba,"transactions")
+
+dim(transaction_prior)
+```
+
+As we can see over 3 Million transctions. 
+
+NOw we will get the frequestly brought items with a support of at least 0.05
+```{r}
+itemFrequencyPlot(transaction_prior,support=0.05,cex.names=0.8)
+```
+
+```{r}
+basket_rules<-apriori(transaction_prior,parameter = list(sup=0.00001,conf=0.6,maxlen=3,target="rules"))
+```
+```{r}
+basket_rules$
+```
+
+```{r}
+hist(
+  size(transaction_prior), 
+  breaks = 0:150, xaxt="n", 
+  ylim=c(0,250000), 
+  col = "blue",
+  main = "Number of Products per Order", 
+  xlab = "Number of Products per order")
+axis(1, at=seq(0,80,by=10), cex.axis=0.8)
+mtext(
+  paste("Total:", length(transaction_prior), "Orders,", sum(size(transaction_prior)), "Products"))
+```
+
+```{r}
+item_frequencies <- itemFrequency(transaction_prior, type="a")
+support <- 0.04
+freq_items <- sort(item_frequencies, decreasing = F)
+freq_items <- freq_items[freq_items>support*length(transaction_prior)]
+
+par(mar=c(2,10,2,2)); options(scipen=5)
+
+barplot(freq_items, horiz=T, las=1, main="Frequent Items", cex.names=.8, xlim=c(0,500000))
+mtext(paste("support:",support), padj = .8)
+abline(v=support*length(transaction_prior), col="red")
+```
+
+We decided on a lower support value of 0.003 since we want to produce 2 items and 3 product combinations. This means that the product gets sold 10,000 times out of 3 million transactions, or around 0.3% of all transactions.
+```{r}
+basket_rules<-apriori(transaction_prior,parameter = list(sup=0.0004, conf=0.5, target="rules"))
+```
+
+
+```{r}
+plot(basket_rules)
+```
+
+```{r}
+plot(head(sort(basket_rules,by="lift"),10),method="graph")
+```
+
+```{r}
+plot(basket_rules,method="grouped")
+```
+
+```{r}
+Ordertrain<-read.csv("Data/order_products__train.csv")
+```
+
+```{r}
+detach("package:plyr", unload=TRUE)
+library("dplyr")
+aisles$aisle <- as.factor(aisles$aisle)
+departments$department <- as.factor(departments$department)
+orders$eval_set <- as.factor(orders$eval_set)
+products$product_name <- as.factor(products$product_name)
+
+Ordertrain$user_id <- orders$user_id[match(Ordertrain$order_id, orders$order_id)]
+```
+
+```{r}
+total_prior_orders <- nrow(orders[orders$eval_set=="prior",])
+
+prior <- prior %>% 
+               inner_join(products, by= "product_id" ) 
+
+prior$product_name <- NULL
+
+#Metrics on products
+product_metrics<- prior %>%
+                        group_by(product_id) %>%
+                        summarise(pr_total_orders = n(),
+                                  pr_total_orders_ratio = n()/total_prior_orders,
+                                  pr_mean_add_to_cart = mean(add_to_cart_order),
+                                  pr_reordered_times = sum(reordered) 
+                          )
+                           
+product_metrics$pr_reordered_ratio = product_metrics$pr_reordered_times / 
+                                                product_metrics$pr_total_orders
+```
+```{r}
+orders$order_dow_hod <- orders$order_dow * 24 + orders$order_hour_of_day
+
+user_metrics <- orders %>% 
+                filter(eval_set == "prior") %>%
+                group_by(user_id) %>%
+                summarise(
+                        user_total_orders = max(order_number),
+                        user_mean_dow = mean(order_dow),
+                        user_mean_hod = mean(order_hour_of_day),
+                        user_mean_dow_hod = mean(order_dow_hod),
+                        user_order_frequency = mean(days_since_prior_order, na.rm=T)
+                )
+
+test_train_orders <-  orders %>% 
+                        filter(eval_set != "prior") %>%
+                        select(user_id, order_id, eval_set, days_since_prior_order)                                
+
+user_metrics <- user_metrics %>%
+                        inner_join(test_train_orders)
+```
+
+```{r}
+prior <- prior %>%
+        inner_join(orders, by = "order_id")
+
+user_metrics2 <- prior %>%
+                group_by(user_id) %>%
+                summarise(
+                        user_total_products =n(),
+                        user_distinct_products = n_distinct(product_id),
+                        user_total_pr_reorders = sum(reordered)
+                )
+
+user_metrics2$user_pr_reorder_ratio = user_metrics2$user_total_pr_reorders/ 
+                                                user_metrics2$user_total_products
+```
+
+```{r}
+user_product_metrics <- prior %>%
+                        group_by(user_id, product_id) %>%
+                        summarise(up_total_orders = n(),
+                                  up_mean_add_to_cart= mean(add_to_cart_order),        
+                                  up_total_reorders = sum(reordered)
+                                 ) 
+
+#rm(prior)
+gc()
+```
+
+```{r}
+user_product_metrics <- user_product_metrics %>% 
+        inner_join(product_metrics, by= "product_id") %>%
+        inner_join(user_metrics, by= "user_id") %>%
+        inner_join(user_metrics2, by= "user_id")
+
+#rm(products, aisles, departments,product_metrics, user_metrics, user_metrics2)
+gc()
+```
+
+```{r}
+user_product_metrics$up_ttlOrd_ttlusrOrd_ratio = user_product_metrics$up_total_orders / user_product_metrics$user_total_orders
+user_product_metrics$up_ttlOrd_ttlprOrd_ratio = user_product_metrics$up_total_orders / user_product_metrics$pr_total_orders
+user_product_metrics$up_ATC_pr_ATC_ratio = user_product_metrics$up_mean_add_to_cart / user_product_metrics$pr_mean_add_to_cart
+user_product_metrics$up_reorder_ratio = user_product_metrics$up_total_reorders / user_product_metrics$user_total_orders
+user_product_metrics$user_total_pr_reorder_ratio <- user_product_metrics$user_total_pr_reorders/
+                                                user_product_metrics$user_total_products
+```
+
+```{r}
+train <- user_product_metrics[user_product_metrics$eval_set == "train",]
+test <- user_product_metrics[user_product_metrics$eval_set == "test",]
+
+train <- train %>% 
+        left_join(Ordertrain %>% select(user_id, product_id, reordered), 
+                  by = c("user_id", "product_id"))
+train$reordered[is.na(train$reordered)] <- 0
+
+train$eval_set <- NULL
+train$user_id <- NULL
+train$product_id <- NULL
+train$order_id <- NULL
+
+test$eval_set <- NULL
+test$user_id <- NULL
+test$reordered <- NULL
+
+#rm(Ordertrain, orders, test_train_orders, user_product_metrics)
+gc()
+```
+
+```{r}
+library(xgboost)
+```
+
+```{r}
+params <- list(
+        "objective"           = "reg:logistic",
+        "eval_metric"         = "logloss",
+        "eta"                 = 0.1,
+        "max_depth"           = 6,
+        "min_child_weight"    = 10,
+        "gamma"               = 0.70,
+        "subsample"           = 0.77,
+        "colsample_bytree"    = 0.95,
+        "alpha"               = 2e-05,
+        "lambda"              = 10
+)
+
+train <- as.data.frame(train)
+test <- as.data.frame(test)
+
+subtrain <- train
+X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
+model <- xgboost(data = X, params = params, nrounds = 30)
+```
+
+```{r}
+importance <- xgb.importance(colnames(X), model = model)
+xgb.ggplot.importance(importance)
+```
+
+```{r}
+#rm(X, importance, subtrain)
+gc()
+```
+
+```{r}
+X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
+test$reordered <- predict(model, X)
+
+test$reordered <- (test$reordered > 0.21) * 1
+
+submission <- test %>%
+        filter(reordered == 1) %>%
+        group_by(order_id) %>%
+        summarise(
+                products = paste(product_id, collapse = " ")
+        )
+
+missing <- data.frame(
+        order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
+        products = "None"
+)
+
+submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
+```
+
+
+```{r}
+ordersTest <- orders[orders$eval_set=="test",]
+
+orderList <- prior %>% group_by(order_id) %>%
+        summarise(
+                products = paste(product_id, collapse = " ")
+        ) 
+ordersTest <- merge(ordersTest[c("order_id")], orderList[c("order_id","products")], by="order_id",all.x=TRUE)
+
+```
+
+
+
+
+
+
+
+
+
+
